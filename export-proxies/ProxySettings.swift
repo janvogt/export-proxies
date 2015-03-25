@@ -10,6 +10,11 @@ import SystemConfiguration
 import CoreFoundation
 import Foundation
 
+private protocol ValueGetter {
+    var type: ProxySettings.ProxySetting { get }
+    func getValueFromDict(dict: NSDictionary) -> String?
+}
+
 class ProxySettings {
     private var settings = [Setting]()
     private struct Setting {
@@ -58,7 +63,7 @@ class ProxySettings {
             return "\(label)_proxy"
         }
     }
-    private struct Protocol {
+    private struct Protocol: ValueGetter {
         let type: ProxySetting
         let kHost, kPort, kEnabled: String
         func getValueFromDict(dict: NSDictionary) -> String? {
@@ -71,7 +76,22 @@ class ProxySettings {
             return value
         }
     }
-    private let protocols = [
+    private struct Exception: ValueGetter {
+        let type = ProxySetting.EXCEPTIONS
+        let kExceptions: NSString = kSCPropNetProxiesExceptionsList
+        func getValueFromDict(dict: NSDictionary) -> String? {
+            var value: String?
+            switch (type, dict[kExceptions] as NSArray?) {
+            case (.EXCEPTIONS, .Some(let exceptions)):
+                value = ",".join(map(exceptions) {
+                    let exc: String = $0 as NSString
+                    return exc.stringByReplacingOccurrencesOfString("*.", withString: ".")})
+            default: break
+            }
+            return value
+        }
+    }
+    private let protocols: [ValueGetter] = [
         Protocol(type: .HTTP,
             kHost: kSCPropNetProxiesHTTPProxy,
             kPort: kSCPropNetProxiesHTTPPort,
@@ -87,7 +107,8 @@ class ProxySettings {
         Protocol(type: .SOCKS,
             kHost: kSCPropNetProxiesSOCKSProxy,
             kPort: kSCPropNetProxiesSOCKSPort,
-            kEnabled: kSCPropNetProxiesSOCKSEnable)
+            kEnabled: kSCPropNetProxiesSOCKSEnable),
+        Exception()
     ]
     init?() {
         if let store = SCDynamicStoreCreateWithOptions(nil, "app", nil, nil, nil)?.takeRetainedValue() {
@@ -99,9 +120,6 @@ class ProxySettings {
                         settings.extend(setting.allCapitalizations)
                     default: break
                     }
-                }
-                if let exceptions = osxProxySettings[kSCPropNetProxiesExceptionsList as String] as? NSArray {
-                    settings.extend(Setting(name: ProxySetting.EXCEPTIONS.envVariableName, value: ",".join(map(exceptions) {return $0 as NSString})).allCapitalizations)
                 }
             } else {
                 return nil
