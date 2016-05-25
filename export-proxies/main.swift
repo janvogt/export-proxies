@@ -7,5 +7,5 @@
 //
 
 if let settings = ProxySettings() {
-    println(settings.exports)
+    print(settings.exports)
 }
