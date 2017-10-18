@@ -12,18 +12,18 @@ import Foundation
 
 private protocol ValueGetter {
     var type: ProxySettings.ProxySetting { get }
-    func getValueFromDict(dict: NSDictionary) -> String?
+    func getValueFromDict(_ dict: NSDictionary) -> String?
 }
 
 class ProxySettings {
-    private var settings = [Setting]()
-    private struct Setting {
+    fileprivate var settings = [Setting]()
+    fileprivate struct Setting {
         var name: String
         var value: String
         var allCapitalizations: [Setting] {
-            return [Setting(name: name.lowercaseString, value: value),
-                Setting(name: name.uppercaseString, value: value),
-                Setting(name: name.capitalizedString, value: value)]
+            return [Setting(name: name.lowercased(), value: value),
+                Setting(name: name.uppercased(), value: value),
+                Setting(name: name.capitalized, value: value)]
         }
         var definition: String {
             get {
@@ -31,17 +31,17 @@ class ProxySettings {
             }
         }
     }
-    private enum ProxySetting {
-        case HTTP, HTTPS, FTP, SOCKS, EXCEPTIONS
+    fileprivate enum ProxySetting {
+        case http, https, ftp, socks, exceptions
         var envVariableName: String {
             get {
                 var envVar: String
                 switch self {
-                case .HTTP: envVar = "http"
-                case .HTTPS: envVar = "https"
-                case .FTP: envVar = "ftp"
-                case .SOCKS: envVar = "all"
-                case .EXCEPTIONS: envVar = "no"
+                case .http: envVar = "http"
+                case .https: envVar = "https"
+                case .ftp: envVar = "ftp"
+                case .socks: envVar = "all"
+                case .exceptions: envVar = "no"
                 }
                 return suffixProxy(envVar)
             }
@@ -50,74 +50,74 @@ class ProxySettings {
             get {
                 var proto: String?
                 switch self {
-                case .HTTP: proto = "http"
-                case .HTTPS: proto = "https"
-                case .FTP: proto = "ftp"
-                case .SOCKS: proto = "socks"
+                case .http: proto = "http"
+                case .https: proto = "https"
+                case .ftp: proto = "ftp"
+                case .socks: proto = "socks"
                 default: break
                 }
                 return proto
             }
         }
-        private func suffixProxy(label: String) -> String {
+        fileprivate func suffixProxy(_ label: String) -> String {
             return "\(label)_proxy"
         }
     }
-    private struct Protocol: ValueGetter {
+    fileprivate struct ProxyProtocol: ValueGetter {
         let type: ProxySetting
         let kHost, kPort, kEnabled: String
-        func getValueFromDict(dict: NSDictionary) -> String? {
+        func getValueFromDict(_ dict: NSDictionary) -> String? {
             var value: String?
             switch (type.protocolName, dict[kHost] as! NSString?, dict[kPort] as! NSNumber?, dict[kEnabled] as! NSNumber?) {
-            case (.Some(let proto), .Some(let host), .Some(let port), let enabled) where (enabled != nil && enabled! == 1):
+            case (.some(let proto), .some(let host), .some(let port), let enabled) where (enabled != nil && enabled! == 1):
                 value = "\(proto)://\(host):\(port)"
             default: break
             }
             return value
         }
     }
-    private struct Exception: ValueGetter {
-        let type = ProxySetting.EXCEPTIONS
+    fileprivate struct Exception: ValueGetter {
+        let type = ProxySetting.exceptions
         let kExceptions: NSString = kSCPropNetProxiesExceptionsList
-        func getValueFromDict(dict: NSDictionary) -> String? {
+        func getValueFromDict(_ dict: NSDictionary) -> String? {
             var value: String?
             switch (type, dict[kExceptions] as? [String]) {
-            case (.EXCEPTIONS, .Some(let exceptions)):
+            case (.exceptions, .some(let exceptions)):
                 value = exceptions.map {
-                    $0.stringByReplacingOccurrencesOfString("*.", withString: ".")
-                }.joinWithSeparator(",")
+                    $0.replacingOccurrences(of: "*.", with: ".")
+                }.joined(separator: ",")
             default: break
             }
             return value
         }
     }
-    private let protocols: [ValueGetter] = [
-        Protocol(type: .HTTP,
+    fileprivate let protocols: [ValueGetter] = [
+        ProxyProtocol(type: .http,
             kHost: kSCPropNetProxiesHTTPProxy as String,
             kPort: kSCPropNetProxiesHTTPPort as String,
             kEnabled: kSCPropNetProxiesHTTPEnable as String),
-        Protocol(type: .HTTPS,
+        ProxyProtocol(type: .https,
             kHost: kSCPropNetProxiesHTTPSProxy as String,
             kPort: kSCPropNetProxiesHTTPSPort as String,
             kEnabled: kSCPropNetProxiesHTTPSEnable as String),
-        Protocol(type: .FTP,
+        ProxyProtocol(type: .ftp,
             kHost: kSCPropNetProxiesFTPProxy as String,
             kPort: kSCPropNetProxiesFTPPort as String,
             kEnabled: kSCPropNetProxiesFTPEnable as String),
-        Protocol(type: .SOCKS,
+        ProxyProtocol(type: .socks,
             kHost: kSCPropNetProxiesSOCKSProxy as String,
             kPort: kSCPropNetProxiesSOCKSPort as String,
             kEnabled: kSCPropNetProxiesSOCKSEnable as String),
         Exception()
     ]
     init?() {
-        if let store = SCDynamicStoreCreateWithOptions(nil, "app", nil, nil, nil) {
+        if let store = SCDynamicStoreCreateWithOptions(nil, "app" as CFString, nil, nil, nil) {
             if let osxProxySettings: NSDictionary = SCDynamicStoreCopyProxies(store) {
                 for proto in protocols {
                     switch (proto.type.envVariableName, proto.getValueFromDict(osxProxySettings)) {
-                    case (let name, .Some(let value)):
+                    case (let name, .some(let value)):
                         let setting = Setting(name: name, value: value)
-                        settings.appendContentsOf(setting.allCapitalizations)
+                        settings.append(contentsOf: setting.allCapitalizations)
                     default: break
                     }
                 }
@@ -130,7 +130,7 @@ class ProxySettings {
     }
     var exports: String {
         get {
-            return settings.map { "export \($0.definition)" }.joinWithSeparator("\n")
+            return settings.map { "export \($0.definition)" }.joined(separator: "\n")
         }
     }
 }
