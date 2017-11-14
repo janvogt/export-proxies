@@ -48,10 +48,16 @@ class ProxySettings {
         }
         var protocolName: String? {
             get {
+                var httpsProxyProtocol: String = "https"
+                if CommandLine.argc == 2 {
+                    if CommandLine.arguments[1] == "--use-http-protocol-for-https-proxy" {
+                        httpsProxyProtocol = "http"
+                    }
+                }
                 var proto: String?
                 switch self {
                 case .http: proto = "http"
-                case .https: proto = "https"
+                case .https: proto = httpsProxyProtocol
                 case .ftp: proto = "ftp"
                 case .socks: proto = "socks"
                 default: break
